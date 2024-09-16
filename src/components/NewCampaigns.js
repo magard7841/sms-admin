@@ -234,7 +234,7 @@ const NewCampaigns = ({ campaignData }) => {
               </p>
               <div className="flex justify-end space-x-4">
                 <button
-                  onClick={() => setShowModal(false)}
+                //   onClick={() => setShowModal(false)}
                   className="bg-gray-100 px-4 py-2 rounded-lg flex items-center"
                 >
                   <FiArrowLeft className="w-6 h-6 mr-2" />
