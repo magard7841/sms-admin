@@ -7,12 +7,11 @@ import {
   faCopy,
   faEye,
   faTrash,
-  faPause,
-  faPlay,
   faPaperPlane,
   faEraser,
 } from "@fortawesome/free-solid-svg-icons";
 import { FiArrowLeft } from "react-icons/fi";
+import Tooltip from "@mui/material/Tooltip";
 
 const SMSCampaigns = () => {
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
@@ -72,6 +71,7 @@ const SMSCampaigns = () => {
 
   const handleCreateCampaign = () => {
     setIsCreatingCampaign(true);
+    setCampaignToEdit(null);
   };
 
   const handleEdit = (id) => {
@@ -158,17 +158,18 @@ const SMSCampaigns = () => {
               </button>
             </div>
           ) : (
-            <div className="flex-grow p-8 bg-white rounded-2xl relative">
+            <div className="flex-grow p-8 bg-white rounded-2xl relative overflow-x-auto">
               <table className="min-w-full table-auto ">
                 <thead
                   style={{ backgroundColor: "#F6F6F6" }}
                   className="rounded-2xl"
                 >
                   <tr>
-                    <th className="text-left  p-3">Date</th>
+                    <th className="text-left p-3">Date</th>
                     <th className="text-left p-3">Campaign Name</th>
                     <th className="text-left p-3">Sender Name</th>
                     <th className="text-left p-3">Message</th>
+                    <th className="text-left p-3">Status</th>
                     <th className="text-left p-3">Recipients</th>
                     <th className="text-left p-3">Delivered</th>
                     <th className="text-left p-3">Opened</th>
@@ -177,48 +178,66 @@ const SMSCampaigns = () => {
                 </thead>
                 <tbody>
                   {campaigns.map((campaign, index) => (
-                    <tr key={index}>
+                    <tr
+                      key={index}
+                      style={{
+                        backgroundColor:
+                          index % 2 === 0 ? "#ffffff" : "#f9f9f9",
+                      }}
+                    >
                       <td className="p-2">
-                        {new Date(campaign.created_at).toLocaleDateString()}{" "}
+                        {new Date(campaign.created_at).toLocaleDateString()}
                       </td>
                       <td className="p-2">{campaign.name}</td>
                       <td className="p-2">{campaign.senders_name}</td>
                       <td className="p-2">{campaign.message}</td>
+                      <td className="p-2">{campaign.status}</td>
                       <td className="p-2">{campaign.recipients}</td>
                       <td className="p-2">{campaign.delivered || "-"}</td>
                       <td className="p-2">{campaign.opened || "-"}</td>
                       <td className="p-2 flex gap-2">
-                        <FontAwesomeIcon
-                          icon={faPen}
-                          className=" w-4 h-3 text-blue-400 cursor-pointer"
-                          onClick={() => handleEdit(campaign.id)}
-                        />
-                        <FontAwesomeIcon
-                          icon={faCopy}
-                          className="w-4 h-3 text-green-500 cursor-pointer"
-                          onClick={() => handleDuplicate(campaign.id)}
-                        />
-                        <FontAwesomeIcon
-                          icon={faEye}
-                          className="w-4 h-3 text-purple-500 cursor-pointer"
-                          onClick={() => handleView(campaign.id)}
-                        />
-                        <FontAwesomeIcon
-                          icon={faTrash}
-                          className="w-4 h-3 text-red-500 cursor-pointer"
-                          onClick={() => handleOpenDeletePopup(campaign.id)}
-                        />
-                        <FontAwesomeIcon icon="fa-solid fa-eraser" />
-                        <FontAwesomeIcon
-                          icon={faEraser}
-                          className="w-4 h-3 text-yellow-500 cursor-pointer"
-                          onClick={() => handleClean(campaign.id)}
-                        />
-                        <FontAwesomeIcon
-                          icon={faPaperPlane}
-                          className="w-4 h-3 text-green-500 cursor-pointer"
-                          onClick={() => handleSendClick(campaign.id)}
-                        />
+                        <Tooltip title="Edit" placement="top" arrow>
+                          <FontAwesomeIcon
+                            icon={faPen}
+                            className="w-4 h-3 text-blue-400 cursor-pointer"
+                            onClick={() => handleEdit(campaign.id)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="Duplicate" placement="top" arrow>
+                          <FontAwesomeIcon
+                            icon={faCopy}
+                            className="w-4 h-3 text-green-500 cursor-pointer"
+                            onClick={() => handleDuplicate(campaign.id)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="View" placement="top" arrow>
+                          <FontAwesomeIcon
+                            icon={faEye}
+                            className="w-4 h-3 text-purple-500 cursor-pointer"
+                            onClick={() => handleView(campaign.id)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="Delete" placement="top" arrow>
+                          <FontAwesomeIcon
+                            icon={faTrash}
+                            className="w-4 h-3 text-red-500 cursor-pointer"
+                            onClick={() => handleOpenDeletePopup(campaign.id)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="Clean" placement="top" arrow>
+                          <FontAwesomeIcon
+                            icon={faEraser}
+                            className="w-4 h-3 text-yellow-500 cursor-pointer"
+                            onClick={() => handleClean(campaign.id)}
+                          />
+                        </Tooltip>
+                        <Tooltip title="Send" placement="top" arrow>
+                          <FontAwesomeIcon
+                            icon={faPaperPlane}
+                            className="w-4 h-3 text-green-500 cursor-pointer"
+                            onClick={() => handleSendClick(campaign.id)}
+                          />
+                        </Tooltip>
                       </td>
                     </tr>
                   ))}
@@ -242,14 +261,21 @@ const SMSCampaigns = () => {
 
       {showSendPopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white rounded-lg p-6 " style={{width:"550px"}}>
-            <h2 className="text-xl font-semibold mb-4">Send your SMS Campaign</h2>
-            <p className="mb-6">Your about to send this SMS Campaigns Before we send your SMS Campaign, please confirm everything is good to go!</p>
+          <div className="bg-white rounded-lg p-6 " style={{ width: "550px" }}>
+            <h2 className="text-xl font-semibold mb-4">
+              Send your SMS Campaign
+            </h2>
+            <p className="mb-6">
+              Your about to send this SMS Campaigns Before we send your SMS
+              Campaign, please confirm everything is good to go!
+            </p>
             <div className="flex justify-between">
               <button
                 onClick={handleCloseSendPopup}
                 className="bg-gray-300 px-4 py-2 rounded-lg flex items-center"
-              > <FiArrowLeft className="w-6 h-6 mr-2 " />
+              >
+                {" "}
+                <FiArrowLeft className="w-6 h-6 mr-2 " />
                 No, go back
               </button>
               <button
@@ -291,7 +317,7 @@ const SMSCampaigns = () => {
             <div className="flex justify-between">
               <button
                 onClick={handleCloseDeletePopup}
-                className="bg-gray-300 px-4 py-2 rounded-lg flex items-center"
+                className="bg-gray-300 px-4 py-2 rounded-lg  flex items-center"
               >
                 <FiArrowLeft className="w-6 h-6 mr-2" />
                 No, go back
@@ -299,7 +325,7 @@ const SMSCampaigns = () => {
 
               <button
                 onClick={handleDelete}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg"
+                className="bg-red-600 text-white px-4 py-2 rounded-lg"
               >
                 Yes, Delete
               </button>
