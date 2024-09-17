@@ -24,12 +24,47 @@ const NewCampaigns = ({ campaignData }) => {
   const [showSendResult, setShowSendResult] = useState(false);
   const [totalRecipients, setTotalRecipients] = useState(0);
 
-const [campaignMetrics, setCampaignMetrics] = useState({
-  totalRecipients: 0,
-  delivered: 0,
-  unreachable: 0,
-  opened: 0,
-});
+ 
+    const [campaignStats, setCampaignStats] = useState({
+      total_recipients: 0,
+      undelivered: 0,
+      delivered: 0,
+      queued: 0,
+    });
+
+
+
+    useEffect(() => {
+      const fetchData = async () => {
+        try {
+          const response = await axios.get(
+            `http://127.0.0.1:5000/api/campaign/${campaignData.id}/recipients?page_number=2&page_size=10`
+          );
+          const {
+            total_recipients,
+            undelivered,
+            delivered,
+            queued,
+          } = response.data;
+  
+          setCampaignStats({
+            total_recipients,
+            undelivered,
+            delivered,
+            queued,
+          });
+        } catch (error) {
+          console.error("Error fetching campaign data:", error);
+        }
+      };
+  
+      fetchData();
+    }, []);
+
+
+
+
+
 
 
   useEffect(() => {
@@ -119,7 +154,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
 
   const handleSend = async () => {
     try {
-      // Perform sending action
       await axios.patch(
         `http://127.0.0.1:5000/api/campaign/${campaignData.id}`,
         {
@@ -129,9 +163,8 @@ const [campaignMetrics, setCampaignMetrics] = useState({
           status: "sent",
         }
       );
-      // Show thank you modal
-      // setShowThankYouModal(true);
       setShowSendResult(true);
+      
     } catch (error) {
       console.error("Error sending campaign", error);
     }
@@ -148,66 +181,68 @@ const [campaignMetrics, setCampaignMetrics] = useState({
       </h1>
 
       {showSendResult && (
-        <div className=" mb-3 ">
-          <h1 style={{ height: "20px" }}> Result</h1>
+        <div className="mb-3">
+        <h1 style={{ height: "20px" }}>Result</h1>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "10px",
+          }}
+        >
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "10px",
+              flex: "1",
+              backgroundColor: "white",
+              padding: "20px",
+              textAlign: "center",
+              borderRadius: "10px",
             }}
           >
-            <div
-              style={{
-                flex: "1",
-                backgroundColor: "white",
-                padding: "20px",
-                textAlign: "center",
-                borderRadius: "10px",
-              }}
-            >
-              <h3>961</h3>
-              <p>Total Recipients</p>
-            </div>
-            <div
-              style={{
-                flex: "1",
-                backgroundColor: "white",
-                padding: "20px",
-                textAlign: "center",
-                borderRadius: "10px",
-              }}
-            >
-              <p>Delivered</p>
-            </div>
-            <div
-              style={{
-                flex: "1",
-                backgroundColor: "white",
-                padding: "20px",
-                textAlign: "center",
-                borderRadius: "10px",
-              }}
-            >
-              <p>Unreachable</p>
-            </div>
-            <div
-              style={{
-                flex: "1",
-                backgroundColor: "white",
-                padding: "20px",
-                textAlign: "center",
-                borderRadius: "10px",
-              }}
-            >
-              <p>Opened</p>
-            </div>
+            <h3>{campaignStats.total_recipients}</h3>
+            <p>Total Recipients</p>
+          </div>
+          <div
+            style={{
+              flex: "1",
+              backgroundColor: "white",
+              padding: "20px",
+              textAlign: "center",
+              borderRadius: "10px",
+            }}
+          >
+            <h3>{campaignStats.delivered}</h3>
+            <p>Delivered</p>
+          </div>
+          <div
+            style={{
+              flex: "1",
+              backgroundColor: "white",
+              padding: "20px",
+              textAlign: "center",
+              borderRadius: "10px",
+            }}
+          >
+            <h3>{campaignStats.undelivered}</h3>
+            <p>Undelivered</p>
+          </div>
+          <div
+            style={{
+              flex: "1",
+              backgroundColor: "white",
+              padding: "20px",
+              textAlign: "center",
+              borderRadius: "10px",
+            }}
+          >
+            <h3>{campaignStats.queued}</h3>
+            <p>Queued</p>
           </div>
         </div>
+      </div>
       )}
       <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4 h-full">
         <div className="w-full lg:w-1/2 bg-white p-5 rounded-lg shadow-lg">
-          {/* Form to edit campaign details */}
           <div className="flex flex-col lg:flex-row justify-between mb-4">
             <div className="flex flex-col w-full lg:w-[48%] mb-4 lg:mb-0">
               <label className="text-md font-medium mb-2">Campaign Name</label>
@@ -231,7 +266,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
             </div>
           </div>
 
-          {/* Text Message */}
           <div className="flex flex-col mb-4">
             <label className="text-md font-medium mb-2">Text Message</label>
             <textarea
@@ -246,17 +280,13 @@ const [campaignMetrics, setCampaignMetrics] = useState({
             Characters: {message.length}
           </div>
 
-          {/* Save button */}
           <div className="flex justify-end">
             <button
-              // onClick={handleSave}
               onClick={() => {
                 if (campaignData) {
-                  // If `campaignData` exists, call a different function
-                  handleSend(); // Define this function separately for the "Send" action
-                  // alert('There is HandleSave')
+                  handleSend(); 
+                  
                 } else {
-                  // Otherwise, call the `handleSave` function
                   handleSave();
                 }
               }}
@@ -267,11 +297,9 @@ const [campaignMetrics, setCampaignMetrics] = useState({
           </div>
         </div>
 
-        {/* Recipients list */}
         <div className="w-full lg:w-1/2 bg-white p-5 rounded-lg shadow-lg relative">
           <h3 className="text-lg font-semibold mb-4">Recipients</h3>
 
-          {/* File input for CSV upload */}
           <input
             type="file"
             accept=".csv"
@@ -280,7 +308,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
             style={{ display: "none" }}
           />
 
-          {/* Upload CSV Button */}
           <button
             onClick={() => fileInputRef.current.click()}
             className={`absolute top-4 right-4 text-blue-500 px-4 py-2 rounded-lg flex items-center ${
@@ -292,9 +319,7 @@ const [campaignMetrics, setCampaignMetrics] = useState({
             Upload CSV
           </button>
 
-          {/* Table for displaying recipients */}
           <div className="overflow-x-auto" style={{ height: "470px" }}>
-            {/* Display the total number of recipients */}
             <div className="flex justify-between items-center ">
               {totalRecipients > 0 && (
                 <p className="text-lg text-red-600">
@@ -335,7 +360,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
             style={{ height: "40px" }}
             className="flex justify-between items-center mb-4  mt-2 bg-gray-100"
           >
-            {/* Pagination Controls */}
             <div className="flex items-center space-x-4 ml-7">
               {/* Previous Page Button with Arrow */}
               <button
@@ -348,12 +372,10 @@ const [campaignMetrics, setCampaignMetrics] = useState({
                 <AiOutlineLeft size={20} />
               </button>
 
-              {/* Page Number Display */}
               <div className="text-gray-700">
                 Page {pageNumber} of {totalPages}
               </div>
 
-              {/* Next Page Button with Arrow */}
               <button
                 onClick={handleNextPage}
                 className={`bg-gray-200 text-gray-700 rounded-lg ${
@@ -366,7 +388,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
                 <AiOutlineRight size={20} />
               </button>
             </div>
-            {/* Clean Table Button */}
             <button
               onClick={() => setShowModal(true)}
               className="flex items-center text-red-700 mr-9 hover:text-black"
@@ -376,7 +397,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
             </button>
           </div>
 
-          {/* Modal for confirmation */}
           {showModal && (
             <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center">
               <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
@@ -386,7 +406,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
                   good to go !
                 </p>
                 <div className="flex justify-between items-center mb-4">
-                  {/* Button aligned to the start */}
                   <button
                     onClick={() => setShowModal(false)}
                     className="bg-gray-300 px-4 py-2 rounded-lg flex items-center"
@@ -394,7 +413,6 @@ const [campaignMetrics, setCampaignMetrics] = useState({
                     <FiArrowLeft className="w-6 h-6 mr-2" />
                     No, go back
                   </button>
-                  {/* Button aligned to the end */}
                   <button
                     onClick={handleCleanRecipients}
                     className="bg-red-600 text-white px-4 py-2 rounded-lg"

@@ -22,6 +22,31 @@ const SMSCampaigns = () => {
   const [campaignToEdit, setCampaignToEdit] = useState(null);
   const [showSendPopup, setShowSendPopup] = useState(false);
   const [campaignToSend, setCampaignToSend] = useState(null);
+  const [showCleanPopup, setShowCleanPopup] = useState(false);
+  const [campaignToClean, setCampaignToClean] = useState(null);
+
+  const handleCleanClick = (id) => {
+    setCampaignToClean(id);
+    setShowCleanPopup(true);
+  };
+
+  const handleConfirmClean = async () => {
+    try {
+      const url = `http://127.0.0.1:5000/api/campaign/${campaignToClean}/recipients/clean`;
+      await axios.patch(url);
+      console.log("Recipients cleaned successfully!");
+    } catch (error) {
+      console.error("Error cleaning recipients:", error);
+    } finally {
+      setShowCleanPopup(false);
+      setCampaignToClean(null);
+    }
+  };
+
+  const handleCloseCleanPopup = () => {
+    setShowCleanPopup(false);
+    setCampaignToClean(null);
+  };
 
   const handleSendClick = (id) => {
     setCampaignToSend(id);
@@ -40,7 +65,7 @@ const SMSCampaigns = () => {
       const response = await axios.get(
         `http://127.0.0.1:5000/api/campaign/${campaignToSend}/details`
       );
-      setModalData(response.data); // Set the data to display in the modal
+      setModalData(response.data); 
       setShowModal(true);
     } catch (error) {
       console.error("Error fetching campaign details:", error);
@@ -76,8 +101,8 @@ const SMSCampaigns = () => {
 
   const handleEdit = (id) => {
     const selectedCampaign = campaigns.find((campaign) => campaign.id === id);
-    setCampaignToEdit(selectedCampaign); // Set the campaign to edit
-    setIsCreatingCampaign(true); // Switch to the NewCampaigns view
+    setCampaignToEdit(selectedCampaign);
+    setIsCreatingCampaign(true);
   };
 
   const handleDuplicate = (id) => {
@@ -123,7 +148,6 @@ const SMSCampaigns = () => {
       const url = `http://127.0.0.1:5000/api/campaign/${campaignId}/recipients/clean`;
       await axios.patch(url);
       console.log("Recipients cleaned successfully!");
-      // You can also update the state or perform other actions after the API call
     } catch (error) {
       console.error("Error cleaning recipients:", error);
     }
@@ -172,7 +196,7 @@ const SMSCampaigns = () => {
                     <th className="text-left p-3">Status</th>
                     <th className="text-left p-3">Recipients</th>
                     <th className="text-left p-3">Delivered</th>
-                    <th className="text-left p-3">Opened</th>
+                    <th className="text-left p-3">Queued</th>
                     <th className="text-left p-3">Action</th>
                   </tr>
                 </thead>
@@ -228,9 +252,10 @@ const SMSCampaigns = () => {
                           <FontAwesomeIcon
                             icon={faEraser}
                             className="w-4 h-3 text-yellow-500 cursor-pointer"
-                            onClick={() => handleClean(campaign.id)}
+                            onClick={() => handleCleanClick(campaign.id)}
                           />
                         </Tooltip>
+
                         <Tooltip title="Send" placement="top" arrow>
                           <FontAwesomeIcon
                             icon={faPaperPlane}
@@ -289,7 +314,6 @@ const SMSCampaigns = () => {
         </div>
       )}
 
-      {/* Modal to Show Data */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
           <div className="bg-white rounded-lg p-6 w-96">
@@ -305,7 +329,32 @@ const SMSCampaigns = () => {
           </div>
         </div>
       )}
-      {/* Delete Confirmation Popup */}
+      {showCleanPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+          <div className="bg-white rounded-lg p-6 w-96">
+            <h2 className="text-xl font-semibold mb-4">Clean Recipients</h2>
+            <p className="mb-6">
+              Are you sure you want to clean the recipients for this campaign?
+            </p>
+            <div className="flex justify-between">
+              <button
+                onClick={handleCloseCleanPopup}
+                className="bg-gray-300 px-4 py-2 rounded-lg flex items-center"
+              >
+                <FiArrowLeft className="w-6 h-6 mr-2" />
+                No, go back
+              </button>
+
+              <button
+                onClick={handleConfirmClean}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg"
+              >
+                Yes, Clean
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showDeletePopup && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
           <div className="bg-white rounded-lg p-6 w-96">
