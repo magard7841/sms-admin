@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+
+import "react-toastify/dist/ReactToastify.css";
 import { FiArrowLeft, FiTrash } from "react-icons/fi";
 import SMSCampaigns from "./SMSCampaigns";
 import { AiOutlineUpload } from "react-icons/ai";
 import { AiOutlineLeft, AiOutlineRight } from "react-icons/ai";
-import { height } from "@fortawesome/free-solid-svg-icons/fa0";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import {
+  cleanRecipients,
+  createSMSCampaigns,
+  fetchCampaignRecipients,
+  sendCampaign,
+  uploadCSV,
+} from "../api";
+import { fetchRecipients as fetchRecipientsAPI } from "../api";
 
 const NewCampaigns = ({ campaignData }) => {
   const [name, setName] = useState(campaignData ? campaignData.name : "");
@@ -15,6 +25,8 @@ const NewCampaigns = ({ campaignData }) => {
     campaignData ? campaignData.message : ""
   );
   const [csvFile, setCsvFile] = useState(null);
+  const [isCampaignSaved, setIsCampaignSaved] = useState(!!campaignData);
+  const [isCsvUploaded, setIsCsvUploaded] = useState(false);
   const fileInputRef = React.useRef(null);
   const [recipients, setRecipients] = useState([]);
   const [showHome2, setShowHome2] = useState(false);
@@ -23,69 +35,117 @@ const NewCampaigns = ({ campaignData }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [showSendResult, setShowSendResult] = useState(false);
   const [totalRecipients, setTotalRecipients] = useState(0);
+  const [totalDelivered, setTotalDelivered] = useState(0);
+  const [totalUndelivered, setTotalUndelivered] = useState(0);
+  const [totalQueued, setTotalQueued] = useState(0);
+  const [newCampaignId, setNewCampaignId] = useState(null);
+  const [campaignStats, setCampaignStats] = useState({
+    total_recipients: 0,
+    undelivered: 0,
+    delivered: 0,
+    queued: 0,
+  });
 
- 
-    const [campaignStats, setCampaignStats] = useState({
-      total_recipients: 0,
-      undelivered: 0,
-      delivered: 0,
-      queued: 0,
-    });
+  const handleSave = async () => {
+    try {
+      const response = await createSMSCampaigns({
+        name,
+        message,
+        senders_name: senders_Name,
+        status: "draft",
+      });
+      setNewCampaignId(response.data.campaign_id);
+      setIsCampaignSaved(true);
+      toast.success("Campaign Saved Successfully");
+    } catch (error) {
+      toast.error("Failed to save the campaign");
+    }
+  };
 
+  const handleUploadCSV = (event) => {
+    const campaignId = newCampaignId || (campaignData && campaignData.id);
+    const file = event.target.files[0];
+    setCsvFile(file);
+    if (!file || !campaignId) return;
+    const formData = new FormData();
+    formData.append("file", file);
 
-
-    useEffect(() => {
-      const fetchData = async () => {
-        try {
-          const response = await axios.get(
-            `http://127.0.0.1:5000/api/campaign/${campaignData.id}/recipients?page_number=2&page_size=10`
-          );
-          const {
-            total_recipients,
-            undelivered,
-            delivered,
-            queued,
-          } = response.data;
-  
-          setCampaignStats({
-            total_recipients,
-            undelivered,
-            delivered,
-            queued,
-          });
-        } catch (error) {
-          console.error("Error fetching campaign data:", error);
+    uploadCSV(campaignId, formData)
+      .then((response) => {
+        if (response.status === 201) {
+          fetchRecipients();
+          setIsCsvUploaded(true);
+          toast.success("CSV upload successfully.");
         }
-      };
-  
-      fetchData();
-    }, []);
-
-
-
-
-
-
+      })
+      .catch((error) => console.error("Error uploading CSV", error));
+  };
 
   useEffect(() => {
-    fetchRecipients(pageNumber, pageSize);
-  }, [pageNumber]);
+    const fetchData = async () => {
+      try {
+        const response = await fetchCampaignRecipients(campaignData.id, 1, 10);
+        const { total_recipients, undelivered, delivered, queued } =
+          response.data;
+
+        setCampaignStats({
+          total_recipients,
+          undelivered,
+          delivered,
+          queued,
+        });
+      } catch (error) {
+        console.error("Error fetching campaign data:", error);
+      }
+    };
+    fetchData();
+    if (
+      campaignData &&
+      (campaignData.status === "SENT" || campaignData.status === null)
+    ) {
+      setShowSendResult(true);
+    }
+  }, [campaignData]);
+
+  useEffect(() => {
+    if (isCampaignSaved) {
+      fetchRecipients(pageNumber, pageSize);
+    }
+  }, [pageNumber, isCampaignSaved]);
+
   const pageSize = 10;
+
   const fetchRecipients = async (pageNumber) => {
     try {
-      const response = await axios.get(
-        `http://127.0.0.1:5000/api/campaign/${campaignData.id}/recipients`,
-        {
-          params: { page_number: pageNumber, page_size: pageSize },
-        }
+      const campaignId = newCampaignId || (campaignData && campaignData.id);
+
+      if (!campaignId) {
+        console.error("No campaign ID available");
+        return;
+      }
+
+      const response = await fetchRecipientsAPI(
+        campaignId,
+        pageNumber,
+        pageSize
       );
 
-      const { data, page_number, total_pages, total_recipients } =
-        response.data;
+      const {
+        data,
+        page_number,
+        total_pages,
+        total_recipients,
+        delivered,
+        undelivered,
+        queued,
+      } = response.data;
       setRecipients(data);
       setPageNumber(page_number);
       setTotalPages(total_pages);
       setTotalRecipients(total_recipients);
+      setTotalDelivered(delivered);
+      setTotalUndelivered(undelivered);
+      setTotalQueued(queued);
     } catch (error) {
       console.error("Error fetching recipients:", error);
     }
@@ -103,46 +163,13 @@ const NewCampaigns = ({ campaignData }) => {
     }
   };
 
-  const handleUploadCSV = (event) => {
-    const file = event.target.files[0];
-    setCsvFile(file);
-
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    axios
-      .post(
-        `http://localhost:5000/api/campaign/${campaignData.id}/upload-recipients`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      )
-      .then(() => fetchRecipients())
-      .catch((error) => console.error("Error uploading CSV", error));
-  };
-
-  const handleSave = async () => {
-    try {
-      await axios.post("http://127.0.0.1:5000/api/campaign/", {
-        name,
-        message,
-        senders_name: senders_Name,
-        status: "draft",
-      });
-      setShowHome2(true);
-    } catch (error) {
-      console.error("Error saving campaign", error);
-    }
-  };
-
   const handleCleanRecipients = async () => {
+    const campaignId = newCampaignId || (campaignData && campaignData.id);
     try {
-      await axios.patch(
-        `http://127.0.0.1:5000/api/campaign/${campaignData.id}/recipients/clean`
-      );
+      await cleanRecipients(campaignId);
       fetchRecipients();
       setShowModal(false);
+      toast.success("Recipients cleaned successfully.");
     } catch (error) {
       console.error("Error cleaning recipients:", error);
     }
@@ -153,18 +180,17 @@ const NewCampaigns = ({ campaignData }) => {
   }
 
   const handleSend = async () => {
+    const campaignId = newCampaignId || (campaignData && campaignData.id);
     try {
-      await axios.patch(
-        `http://127.0.0.1:5000/api/campaign/${campaignData.id}`,
-        {
-          name,
-          message,
-          senders_name: senders_Name,
-          status: "sent",
-        }
-      );
+      await sendCampaign(campaignId, {
+        name,
+        message,
+        senders_name: senders_Name,
+        status: "SENT",
+      });
+      toast.success("Campaign SMS Send Successfully");
+      setIsCampaignSaved(true);
       setShowSendResult(true);
-      
     } catch (error) {
       console.error("Error sending campaign", error);
     }
@@ -177,69 +203,34 @@ const NewCampaigns = ({ campaignData }) => {
           className="w-6 h-6 mr-2"
           onClick={() => setShowHome2(true)}
         />
-        {campaignData ? "Edit Campaign" : "New Campaign"}
+        {showSendResult
+          ? "Result"
+          : campaignData
+          ? "Edit Campaign"
+          : "New Campaign"}
       </h1>
 
       {showSendResult && (
         <div className="mb-3">
-        <h1 style={{ height: "20px" }}>Result</h1>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: "10px",
-          }}
-        >
-          <div
-            style={{
-              flex: "1",
-              backgroundColor: "white",
-              padding: "20px",
-              textAlign: "center",
-              borderRadius: "10px",
-            }}
-          >
-            <h3>{campaignStats.total_recipients}</h3>
-            <p>Total Recipients</p>
-          </div>
-          <div
-            style={{
-              flex: "1",
-              backgroundColor: "white",
-              padding: "20px",
-              textAlign: "center",
-              borderRadius: "10px",
-            }}
-          >
-            <h3>{campaignStats.delivered}</h3>
-            <p>Delivered</p>
-          </div>
-          <div
-            style={{
-              flex: "1",
-              backgroundColor: "white",
-              padding: "20px",
-              textAlign: "center",
-              borderRadius: "10px",
-            }}
-          >
-            <h3>{campaignStats.undelivered}</h3>
-            <p>Undelivered</p>
-          </div>
-          <div
-            style={{
-              flex: "1",
-              backgroundColor: "white",
-              padding: "20px",
-              textAlign: "center",
-              borderRadius: "10px",
-            }}
-          >
-            <h3>{campaignStats.queued}</h3>
-            <p>Queued</p>
+          <div className="flex justify-between gap-2">
+            <div className="flex-1 bg-white p-5 text-center rounded-lg">
+              <p className="text-4xl">{totalRecipients}</p>
+              <p>Total Recipients</p>
+            </div>
+            <div className="flex-1 bg-white p-5 text-center rounded-lg">
+              <p className="text-4xl">{totalDelivered}</p>
+              <p>Delivered</p>
+            </div>
+            <div className="flex-1 bg-white p-5 text-center rounded-lg">
+              <p className="text-4xl">{totalUndelivered}</p>
+              <p>Undelivered</p>
+            </div>
+            <div className="flex-1 bg-white p-5 text-center rounded-lg">
+              <p className="text-4xl">{totalQueued}</p>
+              <p>Queued</p>
+            </div>
           </div>
         </div>
-      </div>
       )}
       <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4 h-full">
         <div className="w-full lg:w-1/2 bg-white p-5 rounded-lg shadow-lg">
@@ -274,31 +265,39 @@ const NewCampaigns = ({ campaignData }) => {
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter the campaign message"
             />
-          </div>
-
-          <div className="text-sm text-gray-500 mt-2 ">
-            Characters: {message.length}
+            <div className="text-sm text-gray-500 mt-2 text-right">
+              Characters: {message.length}
+            </div>
           </div>
 
           <div className="flex justify-end">
             <button
               onClick={() => {
-                if (campaignData) {
-                  handleSend(); 
-                  
+                if (campaignData || newCampaignId) {
+                  handleSend();
                 } else {
                   handleSave();
                 }
               }}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg"
+              className={`px-6 py-2 text-white rounded-lg ${
+                (campaignData && campaignData.status === "SENT") ||
+                showSendResult
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-blue-500"
+              }`}
+              disabled={
+                (campaignData && campaignData.status === "SENT") ||
+                showSendResult
+              }
             >
-              {campaignData ? "Send" : "Save"}
+              {isCsvUploaded ? "Send" : "Save"}
             </button>
           </div>
         </div>
+        <div className="w-full lg:w-1/2 bg-white p-2 rounded-lg shadow-lg relative">
+          {/* <p>Recipients can only be uploaded after saving the campaign.</p> */}
 
-        <div className="w-full lg:w-1/2 bg-white p-5 rounded-lg shadow-lg relative">
-          <h3 className="text-lg font-semibold mb-4">Recipients</h3>
+          <h3 className="text-lg font-semibold mt-1 mb-2">Recipients</h3>
 
           <input
             type="file"
@@ -306,14 +305,17 @@ const NewCampaigns = ({ campaignData }) => {
             onChange={handleUploadCSV}
             ref={fileInputRef}
             style={{ display: "none" }}
+            disabled={!isCampaignSaved}
           />
 
           <button
             onClick={() => fileInputRef.current.click()}
-            className={`absolute top-4 right-4 text-blue-500 px-4 py-2 rounded-lg flex items-center ${
-              campaignData ? "" : "opacity-50 cursor-not-allowed"
+            className={`absolute top-2 right-4 text-blue-500 px-4 py-2 rounded-lg flex items-center ${
+              !isCampaignSaved || showSendResult
+                ? "opacity-50 cursor-not-allowed"
+                : ""
             }`}
-            disabled={!campaignData}
+            disabled={!isCampaignSaved || showSendResult}
           >
             <AiOutlineUpload className="mr-2" />
             Upload CSV
@@ -331,14 +333,29 @@ const NewCampaigns = ({ campaignData }) => {
             <table className="w-full divide-y divide-gray-200 mt-2">
               <thead className="bg-gray-100">
                 <tr>
-                  <th className="py-2 text-center">Phone</th>
-                  <th className="py-2 text-center">Name</th>
+                  <th
+                    style={{ backgroundColor: "#CCCCCC" }}
+                    className="py-2 text-center"
+                  >
+                    Phone
+                  </th>
+                  <th
+                    style={{ backgroundColor: "#CCCCCC" }}
+                    className="py-2 text-center"
+                  >
+                    Name
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {recipients.length > 0 ? (
                   recipients.map((recipient, index) => (
-                    <tr key={index}>
+                    <tr
+                      key={index}
+                      style={{
+                        backgroundColor: index % 2 === 0 ? "" : "#E0E0E0",
+                      }}
+                    >
                       <td className="py-2 text-center">
                         {recipient.mobile_number}
                       </td>
@@ -393,7 +410,7 @@ const NewCampaigns = ({ campaignData }) => {
               className="flex items-center text-red-700 mr-9 hover:text-black"
             >
               <FiTrash className="mr-2" size={20} />
-              Clean table
+              Clean all recipients
             </button>
           </div>
 

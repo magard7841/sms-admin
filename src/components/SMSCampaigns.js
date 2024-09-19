@@ -2,16 +2,24 @@ import React, { useState, useEffect } from "react";
 import NewCampaigns from "./NewCampaigns";
 import axios from "axios";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import {
   faPen,
   faCopy,
-  faEye,
   faTrash,
   faPaperPlane,
   faEraser,
 } from "@fortawesome/free-solid-svg-icons";
 import { FiArrowLeft } from "react-icons/fi";
 import Tooltip from "@mui/material/Tooltip";
+import {
+  copyCampaign,
+  fetchCampaignById,
+  fetchSMSCampaigns,
+  updateCampaignStatusDuplicate,
+} from "../api";
+import { API_URL } from "../config";
 
 const SMSCampaigns = () => {
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
@@ -20,29 +28,33 @@ const SMSCampaigns = () => {
   const [showDeletePopup, setShowDeletePopup] = useState(false);
   const [campaignToDelete, setCampaignToDelete] = useState(null);
   const [campaignToEdit, setCampaignToEdit] = useState(null);
+  const [campaignStatus, setCampaignStatus] = useState(null);
   const [showSendPopup, setShowSendPopup] = useState(false);
   const [campaignToSend, setCampaignToSend] = useState(null);
   const [showCleanPopup, setShowCleanPopup] = useState(false);
   const [campaignToClean, setCampaignToClean] = useState(null);
+  const [refresh, setRefresh] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalData, setModalData] = useState(null);
+
+  useEffect(() => {
+    const fetchCampaigns = async () => {
+      try {
+        const response = await fetchSMSCampaigns();
+        setCampaigns(response.data);
+      } catch (error) {
+        toast.error("Error fetching campaigns:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCampaigns();
+  }, [refresh]);
 
   const handleCleanClick = (id) => {
     setCampaignToClean(id);
     setShowCleanPopup(true);
   };
-
-  const handleConfirmClean = async () => {
-    try {
-      const url = `http://127.0.0.1:5000/api/campaign/${campaignToClean}/recipients/clean`;
-      await axios.patch(url);
-      console.log("Recipients cleaned successfully!");
-    } catch (error) {
-      console.error("Error cleaning recipients:", error);
-    } finally {
-      setShowCleanPopup(false);
-      setCampaignToClean(null);
-    }
-  };
-
   const handleCloseCleanPopup = () => {
     setShowCleanPopup(false);
     setCampaignToClean(null);
@@ -57,77 +69,6 @@ const SMSCampaigns = () => {
     setShowSendPopup(false);
     setCampaignToSend(null);
   };
-  const [showModal, setShowModal] = useState(false);
-  const [modalData, setModalData] = useState(null);
-
-  const handleShowModal = async () => {
-    try {
-      const response = await axios.get(
-        `http://127.0.0.1:5000/api/campaign/${campaignToSend}/details`
-      );
-      setModalData(response.data); 
-      setShowModal(true);
-    } catch (error) {
-      console.error("Error fetching campaign details:", error);
-    } finally {
-      setShowSendPopup(false);
-    }
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    setModalData(null);
-  };
-
-  useEffect(() => {
-    const fetchCampaigns = async () => {
-      try {
-        const response = await axios.get("http://127.0.0.1:5000/api/campaign/");
-        setCampaigns(response.data);
-      } catch (error) {
-        console.error("Error fetching campaigns:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCampaigns();
-  }, []);
-
-  const handleCreateCampaign = () => {
-    setIsCreatingCampaign(true);
-    setCampaignToEdit(null);
-  };
-
-  const handleEdit = (id) => {
-    const selectedCampaign = campaigns.find((campaign) => campaign.id === id);
-    setCampaignToEdit(selectedCampaign);
-    setIsCreatingCampaign(true);
-  };
-
-  const handleDuplicate = (id) => {
-    console.log(`Duplicate campaign with ID: ${id}`);
-  };
-
-  const handleView = (id) => {
-    console.log(`View campaign with ID: ${id}`);
-  };
-
-  const handleDelete = async () => {
-    try {
-      await axios.delete(
-        `http://127.0.0.1:5000/api/campaign/${campaignToDelete}`
-      );
-      setCampaigns(
-        campaigns.filter((campaign) => campaign.id !== campaignToDelete)
-      );
-    } catch (error) {
-      console.error("Error deleting campaign:", error);
-      alert("Failed to delete the campaign.");
-    } finally {
-      setShowDeletePopup(false);
-    }
-  };
 
   const handleOpenDeletePopup = (id) => {
     setCampaignToDelete(id);
@@ -139,19 +80,109 @@ const SMSCampaigns = () => {
     setCampaignToDelete(null);
   };
 
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setModalData(null);
+  };
+
+  const handleCreateCampaign = () => {
+    setIsCreatingCampaign(true);
+    setCampaignToEdit(null);
+  };
+
+  const handleEdit = (id) => {
+    const selectedCampaign = campaigns.find((campaign) => campaign.id === id);
+
+    setCampaignToEdit({
+      ...selectedCampaign,
+      status: selectedCampaign.status,
+    });
+    setCampaignStatus({
+      ...selectedCampaign.status,
+    });
+
+    setIsCreatingCampaign(true);
+  };
+
+  const handleDuplicate = async (id) => {
+    try {
+      const selectedCampaign = campaigns.find((campaign) => campaign.id === id);
+
+      if (selectedCampaign) {
+        const response = await copyCampaign(id);
+
+        if (response.status === 201) {
+          const newCampaignId = response.data.campaign_id;
+
+          await updateCampaignStatusDuplicate(newCampaignId, "DRAFT");
+
+          setRefresh((prev) => !prev);
+          toast.success("Duplicate Campaign Created");
+        }
+      } else {
+        toast.error("Campaign not found");
+      }
+    } catch (error) {
+      toast.error("Error duplicating campaign:", error);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await axios.delete(`${API_URL}/api/campaign/${campaignToDelete}`);
+      setCampaigns(
+        campaigns.filter((campaign) => campaign.id !== campaignToDelete)
+      );
+      toast.success("Capaigns Deleted")
+    } catch (error) {
+      toast.error("Error deleting campaign:", error);
+    
+    } finally {
+      setShowDeletePopup(false);
+    }
+  };
+
+  const handleConfirmClean = async () => {
+    try {
+      const url = `${API_URL}/api/campaign/${campaignToClean}/recipients/clean`;
+      await axios.patch(url);
+      
+      toast.success("Recipients cleaned successfully!");
+    } catch (error) {
+      toast.error("Error cleaning recipients:", error);
+    } finally {
+      setShowCleanPopup(false);
+      setCampaignToClean(null);
+    }
+  };
+
+  const handleShowModal = async () => {
+    if (campaignToSend) {
+      try {
+        const campaignResponse = await fetchCampaignById(campaignToSend);
+        const { name, senders_name } = campaignResponse.data;
+        const url = `${API_URL}/api/campaign/${campaignToSend}`;
+
+        await axios.patch(url, {
+          status: "SENT",
+          name,
+          senders_name,
+        });
+        toast.success("Campaign sent successfully!")
+        setRefresh((prev) => !prev);
+      } catch (error) {
+        toast.error("Error sending campaign:");
+      } finally {
+        setShowSendPopup(false);
+        setCampaignToSend(null);
+      }
+    }
+  };
+
   if (loading) {
     return <p>Loading...</p>;
   }
 
-  const handleClean = async (campaignId) => {
-    try {
-      const url = `http://127.0.0.1:5000/api/campaign/${campaignId}/recipients/clean`;
-      await axios.patch(url);
-      console.log("Recipients cleaned successfully!");
-    } catch (error) {
-      console.error("Error cleaning recipients:", error);
-    }
-  };
   return (
     <div className="flex flex-col h-full">
       {!isCreatingCampaign ? (
@@ -182,94 +213,113 @@ const SMSCampaigns = () => {
               </button>
             </div>
           ) : (
-            <div className="flex-grow p-8 bg-white rounded-2xl relative overflow-x-auto">
-              <table className="min-w-full table-auto ">
-                <thead
-                  style={{ backgroundColor: "#F6F6F6" }}
-                  className="rounded-2xl"
-                >
-                  <tr>
-                    <th className="text-left p-3">Date</th>
-                    <th className="text-left p-3">Campaign Name</th>
-                    <th className="text-left p-3">Sender Name</th>
-                    <th className="text-left p-3">Message</th>
-                    <th className="text-left p-3">Status</th>
-                    <th className="text-left p-3">Recipients</th>
-                    <th className="text-left p-3">Delivered</th>
-                    <th className="text-left p-3">Queued</th>
-                    <th className="text-left p-3">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {campaigns.map((campaign, index) => (
-                    <tr
-                      key={index}
-                      style={{
-                        backgroundColor:
-                          index % 2 === 0 ? "#ffffff" : "#f9f9f9",
-                      }}
-                    >
-                      <td className="p-2">
-                        {new Date(campaign.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="p-2">{campaign.name}</td>
-                      <td className="p-2">{campaign.senders_name}</td>
-                      <td className="p-2">{campaign.message}</td>
-                      <td className="p-2">{campaign.status}</td>
-                      <td className="p-2">{campaign.recipients}</td>
-                      <td className="p-2">{campaign.delivered || "-"}</td>
-                      <td className="p-2">{campaign.opened || "-"}</td>
-                      <td className="p-2 flex gap-2">
-                        <Tooltip title="Edit" placement="top" arrow>
-                          <FontAwesomeIcon
-                            icon={faPen}
-                            className="w-4 h-3 text-blue-400 cursor-pointer"
-                            onClick={() => handleEdit(campaign.id)}
-                          />
-                        </Tooltip>
-                        <Tooltip title="Duplicate" placement="top" arrow>
-                          <FontAwesomeIcon
-                            icon={faCopy}
-                            className="w-4 h-3 text-green-500 cursor-pointer"
-                            onClick={() => handleDuplicate(campaign.id)}
-                          />
-                        </Tooltip>
-                        <Tooltip title="View" placement="top" arrow>
-                          <FontAwesomeIcon
-                            icon={faEye}
-                            className="w-4 h-3 text-purple-500 cursor-pointer"
-                            onClick={() => handleView(campaign.id)}
-                          />
-                        </Tooltip>
-                        <Tooltip title="Delete" placement="top" arrow>
-                          <FontAwesomeIcon
-                            icon={faTrash}
-                            className="w-4 h-3 text-red-500 cursor-pointer"
-                            onClick={() => handleOpenDeletePopup(campaign.id)}
-                          />
-                        </Tooltip>
-                        <Tooltip title="Clean" placement="top" arrow>
-                          <FontAwesomeIcon
-                            icon={faEraser}
-                            className="w-4 h-3 text-yellow-500 cursor-pointer"
-                            onClick={() => handleCleanClick(campaign.id)}
-                          />
-                        </Tooltip>
-
-                        <Tooltip title="Send" placement="top" arrow>
-                          <FontAwesomeIcon
-                            icon={faPaperPlane}
-                            className="w-4 h-3 text-green-500 cursor-pointer"
-                            onClick={() => handleSendClick(campaign.id)}
-                          />
-                        </Tooltip>
-                      </td>
+            <div className="flex-grow bg-white rounded-2xl relative">
+              <div className="overflow-x-auto" style={{ maxHeight: "570px" }}>
+                <table className="min-w-full table-auto ">
+                  <thead
+                    style={{ backgroundColor: "#CCCCCC" }}
+                    className="rounded-2xl"
+                  >
+                    <tr>
+                      <th className="text-center p-3">Date</th>
+                      <th className="text-center p-3">Campaign Name</th>
+                      <th className="text-center p-3">Sender Name</th>
+                      <th className="text-center p-3">Message</th>
+                      <th className="text-center p-3">Status</th>
+                      <th className="text-center p-3">Recipients</th>
+                      <th className="text-center p-3">Delivered</th>
+                      <th className="text-center p-3">Queued</th>
+                      <th className="text-center p-3">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {campaigns.map((campaign, index) => (
+                      <tr
+                        key={campaign.id}
+                        style={{
+                          backgroundColor: index % 2 === 0 ? "" : "#E0E0E0",
+                        }}
+                      >
+                        <td className="text-center p-2">
+                          {new Date(campaign.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="text-center p-2">
+                          <TruncatedText text={campaign.name} maxLength={15} />
+                        </td>
+                        <td className="text-center p-2">
+                          {campaign.senders_name}
+                        </td>
+                        <td className="text-center p-2">
+                          <TruncatedText
+                            text={campaign.message}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td className="text-center p-2">{campaign.status}</td>
+                        <td className="text-center p-2">
+                          {campaign.recipients || "0"}
+                        </td>
+                        <td className="text-center p-2">
+                          {campaign.delivered || "0"}
+                        </td>
+                        <td className="text-center p-2">
+                          {campaign.opened || "0"}
+                        </td>
+                        <td className="text-center p-2 flex gap-2">
+                          <Tooltip title="Edit" placement="top" arrow>
+                            <FontAwesomeIcon
+                              icon={faPen}
+                              className="w-4 h-3 text-blue-400 cursor-pointer"
+                              onClick={() => handleEdit(campaign.id)}
+                            />
+                          </Tooltip>
+                          <Tooltip title="Duplicate" placement="top" arrow>
+                            <FontAwesomeIcon
+                              icon={faCopy}
+                              className="w-4 h-3 text-green-500 cursor-pointer"
+                              onClick={() => handleDuplicate(campaign.id)}
+                            />
+                          </Tooltip>
 
-              <div className="absolute right-8 bottom-8">
+                          <Tooltip title="Delete" placement="top" arrow>
+                            <FontAwesomeIcon
+                              icon={faTrash}
+                              className="w-4 h-3 text-red-500 cursor-pointer"
+                              onClick={() => handleOpenDeletePopup(campaign.id)}
+                            />
+                          </Tooltip>
+                          <Tooltip title="Clean" placement="top" arrow>
+                            <FontAwesomeIcon
+                              icon={faEraser}
+                              className="w-4 h-3 text-yellow-500 cursor-pointer"
+                              onClick={() => handleCleanClick(campaign.id)}
+                            />
+                          </Tooltip>
+
+                          <Tooltip title="Send" placement="top" arrow>
+                            <FontAwesomeIcon
+                              icon={faPaperPlane}
+                              className={`w-4 h-3 ${
+                                campaign.status === "SENT"
+                                  ? "text-gray-400 cursor-not-allowed"
+                                  : "text-green-500 cursor-pointer"
+                              }`}
+                              onClick={() => {
+                                if (campaign.status !== "SENT") {
+                                  handleSendClick(campaign.id);
+                                }
+                              }}
+                              disabled={campaign.status === "SENT"}
+                            />
+                          </Tooltip>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="fixed bottom-12 right-20">
                 <button
                   onClick={handleCreateCampaign}
                   className="h-10 px-6 bg-[#175eff] rounded-lg text-white"
@@ -281,7 +331,10 @@ const SMSCampaigns = () => {
           )}
         </>
       ) : (
-        <NewCampaigns campaignData={campaignToEdit} />
+        <NewCampaigns
+          campaignData={campaignToEdit}
+          campaignData1={campaignStatus}
+        />
       )}
 
       {showSendPopup && (
@@ -387,3 +440,19 @@ const SMSCampaigns = () => {
 };
 
 export default SMSCampaigns;
+
+const TruncatedText = ({ text, maxLength = 100 }) => {
+  const truncatedText =
+    text.length > maxLength ? text.substr(0, maxLength) + "..." : text;
+
+  return (
+    <div className="group relative">
+      <div className="max-w-xs overflow-hidden">{truncatedText}</div>
+      {text.length > maxLength && (
+        <div className="absolute z-10 invisible group-hover:visible bg-gray-600 text-white p-2 rounded shadow-lg mt-2 text-sm w-72">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+};
